@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>독서모임</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Noto+Serif+KR:wght@600;800&family=Nanum+Pen+Script&display=swap">
+<style>
+:root{--bg:#eef1f5;--card:#fff;--ink:#1b2a41;--sub:#5b6b80;--line:#d5dce6;--accent:#2f6f5e;--accent-ink:#fff;--mark:#e8b931;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121a26;--card:#1a2433;--ink:#e8edf4;--sub:#9aa9bd;--line:#2c3a4e;--accent:#5bb89e;--accent-ink:#0d1a16;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121a26;--card:#1a2433;--ink:#e8edf4;--sub:#9aa9bd;--line:#2c3a4e;--accent:#5bb89e;--accent-ink:#0d1a16;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Noto Sans KR",system-ui,sans-serif}
+main{max-width:640px;margin:0 auto;padding:20px 16px 48px}
+h1,h2{font-family:"Noto Serif KR",Georgia,serif;margin:0}
+h1{font-size:1.5rem;font-weight:800}
+h2{font-size:1.1rem;font-weight:600;margin-bottom:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-top:16px}
+.book{display:flex;gap:14px}
+.spine{width:14px;border-radius:3px;background:var(--accent);box-shadow:inset -3px 0 0 var(--mark);flex:none}
+.book h2{font-size:1.35rem;margin:0}
+.sub{color:var(--sub);font-size:.9rem}
+input,button{font:inherit;color:inherit}
+input{width:100%;background:transparent;border:1px solid var(--line);border-radius:6px;padding:9px 10px}
+input:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+label{display:block;font-size:.85rem;color:var(--sub);margin:10px 0 4px}
+.row{display:flex;gap:8px}.row>*{flex:1}
+button{cursor:pointer;border:1px solid var(--line);background:transparent;border-radius:6px;padding:8px 12px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:500}
+button.link{border:0;padding:2px 6px;color:var(--sub);font-size:.85rem}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-top:16px;align-items:center}
+.tab{border-radius:999px;padding:6px 14px}
+.tab[aria-selected=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.item{border-top:1px solid var(--line);padding:12px 0}
+.item:first-of-type{border-top:0}
+.meta{display:flex;justify-content:space-between;gap:8px;font-size:.85rem;color:var(--sub);margin-bottom:6px}
+.paper{display:block;width:100%;background:#fff;border:1px solid var(--line);border-radius:6px}
+canvas.paper{height:170px;touch-action:none;cursor:crosshair}
+.padbtn{display:flex;gap:8px;margin-top:8px}
+.empty{color:var(--sub);font-size:.95rem;padding:6px 0}
+.ex{border-style:dashed}
+.hw{font-family:"Nanum Pen Script","Noto Sans KR",cursive;font-size:1.5rem;line-height:1.4;background:#fff;color:#1b2a41;border:1px solid var(--line);border-radius:6px;padding:8px 12px}
+details summary{cursor:pointer;color:var(--sub);font-size:.9rem}
+</style>
+</head>
+<body>
+<main>
+  <h1 id="clubName" contenteditable="true" spellcheck="false" aria-label="모임 이름">우리 독서모임</h1>
+  <div class="sub">이름을 눌러 바꿀 수 있어요</div>
+
+  <section class="card" id="bookCard"></section>
+
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <div id="person"></div>
+
+  <section class="card">
+    <h2>다음 모임</h2>
+    <div class="row">
+      <div><label for="mDate">날짜와 시간</label><input id="mDate" type="datetime-local"></div>
+      <div><label for="mPlace">장소</label><input id="mPlace" placeholder="예: 동네 카페"></div>
+    </div>
+    <label for="mRange">읽어 올 범위</label><input id="mRange" placeholder="예: 1장~3장">
+    <div id="mSummary" class="sub" style="margin-top:10px"></div>
+  </section>
+
+  <details class="card"><summary>읽은 책 기록</summary><div id="done" style="margin-top:10px"></div></details>
+</main>
+<script>
+var K='bookclub-v2';
+var S={name:'우리 독서모임',book:{title:'',author:''},date:'',place:'',range:'',members:[],cur:0,done:[]};
+try{var raw=localStorage.getItem(K);if(raw){S=Object.assign(S,JSON.parse(raw))}}catch(e){}
+function save(){try{localStorage.setItem(K,JSON.stringify(S))}catch(e){alert('저장 공간이 가득 찼어요. 오래된 글을 지워주세요.')}}
+function esc(t){return String(t).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+var $=function(id){return document.getElementById(id)};
+
+/* 손글씨 패드 */
+function makePad(host,saveLabel,onSave,withPage){
+  host.innerHTML=(withPage?'<div class="row" style="margin-bottom:8px"><input type="number" min="0" placeholder="쪽 (선택)" class="pg" style="max-width:120px;flex:none"></div>':'')+'<canvas class="paper" aria-label="손글씨 쓰는 곳"></canvas><div class="padbtn"><button class="primary sv">'+saveLabel+'</button><button class="cl">지우기</button></div>';
+  var c=host.querySelector('canvas'),ctx,drawing=false,dirty=false,last=null;
+  function size(){var r=c.getBoundingClientRect(),d=window.devicePixelRatio||1;c.width=r.width*d;c.height=r.height*d;ctx=c.getContext('2d');ctx.scale(d,d);ctx.fillStyle='#fff';ctx.fillRect(0,0,r.width,r.height);ctx.strokeStyle='#1b2a41';ctx.lineWidth=2.4;ctx.lineCap='round';ctx.lineJoin='round';dirty=false}
+  size();
+  function pt(e){var r=c.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
+  c.addEventListener('pointerdown',function(e){e.preventDefault();c.setPointerCapture(e.pointerId);drawing=true;last=pt(e);ctx.beginPath();ctx.arc(last.x,last.y,1.2,0,7);ctx.fillStyle='#1b2a41';ctx.fill();dirty=true});
+  c.addEventListener('pointermove',function(e){if(!drawing)return;var p=pt(e);ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p.x,p.y);ctx.stroke();last=p});
+  ['pointerup','pointercancel'].forEach(function(n){c.addEventListener(n,function(){drawing=false})});
+  host.querySelector('.cl').onclick=size;
+  host.querySelector('.sv').onclick=function(){if(!dirty){alert('먼저 손으로 써 주세요.');return}
+    var pg=host.querySelector('.pg');onSave(c.toDataURL('image/png'),pg?pg.value:'');size();if(pg)pg.value=''};
+}
+
+function renderBook(){
+  var b=S.book,el=$('bookCard');
+  if(!b.title){
+    el.innerHTML='<h2>이번 책</h2><label for="bT">책 제목</label><input id="bT"><label for="bA">지은이</label><input id="bA"><div style="margin-top:12px"><button class="primary" id="bSet">이 책으로 시작</button></div>';
+    $('bSet').onclick=function(){var t=$('bT').value.trim();if(!t){$('bT').focus();return}
+      S.book={title:t,author:$('bA').value.trim()};save();renderBook()};
+    return;
+  }
+  el.innerHTML='<div class="book"><div class="spine"></div><div><div class="sub">이번 책</div><h2>'+esc(b.title)+'</h2><div class="sub">'+esc(b.author)+'</div></div></div><div style="margin-top:14px;display:flex;gap:8px"><button id="bDone">완독하고 다음 책으로</button><button class="link" id="bEdit">책 바꾸기</button></div>';
+  $('bDone').onclick=function(){if(confirm('「'+b.title+'」을(를) 읽은 책에 기록할까요? 멤버들의 글은 새 책을 위해 비워집니다.')){S.done.unshift({title:b.title,author:b.author});S.book={title:'',author:''};S.members.forEach(function(m){m.notes=[];m.review=null;m.qs=[]});save();renderAll()}};
+  $('bEdit').onclick=function(){S.book={title:'',author:''};save();renderBook()};
+}
+function sum(){
+  var s='';
+  if(S.date){var d=new Date(S.date);if(!isNaN(d)){var diff=Math.ceil((d-new Date())/864e5);
+    s=d.toLocaleString('ko-KR',{month:'long',day:'numeric',weekday:'short',hour:'numeric',minute:'2-digit'})+(diff>0?' · D-'+diff:diff===0?' · 오늘':' · 지난 모임')}}
+  $('mSummary').textContent=s||'날짜를 정하면 남은 날짜를 알려드려요.';
+}
+function renderTabs(){
+  var el=$('tabs');
+  el.innerHTML=S.members.map(function(m,i){return '<button class="tab" role="tab" aria-selected="'+(i===S.cur)+'" data-i="'+i+'">'+esc(m.name)+'</button>'}).join('')+(S.members.length?'<button class="tab" id="addM">+ 멤버 추가</button>':'');
+  el.querySelectorAll('[data-i]').forEach(function(b){b.onclick=function(){S.cur=+b.dataset.i;save();renderTabs();renderPerson()}});
+  if($('addM'))$('addM').onclick=addMember;
+}
+function addMember(){var n=prompt('멤버 이름');if(!n||!n.trim())return;S.members.push({name:n.trim(),notes:[],review:null,qs:[]});S.cur=S.members.length-1;save();renderTabs();renderPerson()}
+function imgs(list,kind){
+  return list.length?list.map(function(n,i){var src=n.img||n;return '<div class="item"><div class="meta"><span>'+(n.page?n.page+'쪽':'')+'</span><button class="link" data-k="'+kind+'" data-d="'+i+'">삭제</button></div><img class="paper" alt="손글씨 글" src="'+src+'"></div>'}).join(''):'<div class="empty">아직 없어요.</div>';
+}
+function renderPerson(){
+  var el=$('person'),m=S.members[S.cur];
+  if(!m){el.innerHTML='<section class="card ex"><div class="sub" style="margin-bottom:8px">예시 · 멤버마다 이런 개인칸이 생기고, 손으로 쓴 글이 쌓여요</div><h2>김독서의 한 줄 감상</h2><div class="hw">3쪽 · 첫 문장부터 마음에 남았다</div><h2 style="margin-top:16px">김독서의 총평</h2><div class="hw">천천히 곱씹으며 읽기 좋은 책이었다.</div><h2 style="margin-top:16px">김독서의 토론 질문</h2><div class="hw">주인공이 다른 선택을 했다면?</div></section><button class="primary" id="addM2" style="width:100%;margin-top:12px">+ 멤버 추가</button>';$('addM2').onclick=addMember;return}
+  el.innerHTML=
+  '<section class="card"><h2>'+esc(m.name)+'의 한 줄 감상</h2><div id="padN"></div><div id="listN" style="margin-top:12px">'+imgs(m.notes,'n')+'</div></section>'+
+  '<section class="card"><h2>'+esc(m.name)+'의 총평</h2>'+(m.review?'<img class="paper" alt="총평" src="'+m.review+'"><div class="padbtn"><button id="rvDel">총평 다시 쓰기</button></div>':'<div id="padR"></div>')+'</section>'+
+  '<section class="card"><h2>'+esc(m.name)+'의 토론 질문</h2><div id="padQ"></div><div id="listQ" style="margin-top:12px">'+imgs(m.qs,'q')+'</div></section>'+
+  '<div style="margin-top:12px;text-align:right"><button class="link" id="rmM">'+esc(m.name)+' 삭제</button></div>';
+  makePad($('padN'),'감상 남기기',function(img,pg){m.notes.unshift({img:img,page:pg});save();renderPerson()},true);
+  if(!m.review)makePad($('padR'),'총평 저장',function(img){m.review=img;save();renderPerson()});
+  else $('rvDel').onclick=function(){m.review=null;save();renderPerson()};
+  makePad($('padQ'),'질문 추가',function(img){m.qs.push({img:img});save();renderPerson()});
+  el.querySelectorAll('[data-d]').forEach(function(b){b.onclick=function(){(b.dataset.k==='n'?m.notes:m.qs).splice(+b.dataset.d,1);save();renderPerson()}});
+  $('rmM').onclick=function(){if(confirm(m.name+'님의 글을 모두 지울까요?')){S.members.splice(S.cur,1);S.cur=0;save();renderTabs();renderPerson()}};
+}
+function renderDone(){
+  $('done').innerHTML=S.done.length?S.done.map(function(d){return '<div class="item"><strong>'+esc(d.title)+'</strong> <span class="sub">'+esc(d.author)+'</span></div>'}).join(''):'<div class="empty">완독한 책이 여기에 쌓여요.</div>';
+}
+function renderAll(){$('clubName').textContent=S.name;renderBook();$('mDate').value=S.date;$('mPlace').value=S.place;$('mRange').value=S.range;sum();renderTabs();renderPerson();renderDone()}
+
+$('clubName').addEventListener('input',function(){S.name=this.textContent.trim()||'우리 독서모임';save()});
+$('clubName').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();this.blur()}});
+$('mDate').onchange=function(){S.date=this.value;save();sum()};
+$('mPlace').oninput=function(){S.place=this.value;save()};
+$('mRange').oninput=function(){S.range=this.value;save()};
+renderAll();
+</script>
+</body>
+</html>
